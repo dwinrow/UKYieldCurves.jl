@@ -2,20 +2,7 @@ module UKYieldCurves
 
 using ZipFile, XLSX, DataFrames, Dates, CSV, Plots
 
-directory = ""
-addindirectory = ""
-
-#commit change
-
-function setDirectory(dir)
-    directory = dir
-end
-
-function setAddinDirectory(dir)
-    addindirectory = dir
-end
-
-function downloadLatestData(;latestonly=false)
+function downloadLatestData(directory;latestonly=false)
     urlstem = raw"https://www.bankofengland.co.uk/-/media/boe/files/statistics/yield-curves"
     filenamelatestdata = "latest-yield-curve-data.zip"
     filenamenominaldata = "glcnominalddata.zip"
@@ -31,11 +18,10 @@ function downloadLatestData(;latestonly=false)
         #uses 7 zip
         run(`7z e $(joinpath(directory,file)) -y -o$(directory)`)
     end
-
 end
 
-function gatherdata(;fetch=false, saveme=true, latestonly=false)
-    fetch && downloadLatestData(latestonly=latestonly)
+function gatherdata(; directory="", outdirectory="",fetch=false, saveme=true, latestonly=false)
+    fetch && downloadLatestData(directory,latestonly=latestonly)
     dfs = [DataFrame() DataFrame()
             DataFrame() DataFrame()]
     categories = ["GLC Inflation","GLC Nominal"]
@@ -58,22 +44,19 @@ function gatherdata(;fetch=false, saveme=true, latestonly=false)
     sort!.(dfs,"date",rev=true)
     filter!.(Ref(:date=>x->.!ismissing.(x)),dfs)
     if saveme
-        savedata(dfs)
+        savedata(outdirectory,dfs)
     else
         dfs
     end
 end
 
-function savedata(dfs)
+function savedata(directory,dfs;dividingyear=2016)
 
     #the series corresponding to first dimension of dfs
     seriestype = ["BoE Implied RPI","uknom"]
 
     #the suffixes corresponding to the second dimension of dfs
     suffixes = [""," FWD"]
-
-    #The year at which we split the csvs for performance
-    dividingyear = 2016
 
     for (i,series) in enumerate(seriestype)
         for (j, suffix) in enumerate(suffixes)
@@ -88,8 +71,8 @@ function savedata(dfs)
     end
 end
 
-function getlastdate()
-    files = readdir(addindirectory,join=true)
+function getlastdate(directory)
+    files = readdir(directory,join=true)
     filter!(x->occursin(r"uknom \d",x),files)
     sort!(files,rev=true)
     rows = CSV.Rows(files[1],limit=1)
@@ -98,8 +81,8 @@ function getlastdate()
     end
 end
 
-function getBoE(series;date=nothing,duration=nothing)
-    files = readdir(addindirectory,join=true)
+function getBoE(directory, series;date=nothing,duration=nothing)
+    files = readdir(directory,join=true)
     filter!(x->(occursin(Regex(series*"( \\d{4})?.csv"),x)),files)
     df = DataFrame()
     for file in files
@@ -108,7 +91,6 @@ function getBoE(series;date=nothing,duration=nothing)
     df.date = Date.(df.date,"d/m/Y")
     sort!(df,:date)
 end 
-
 
 function getrow(df,d)
     d = maximum(filter(<(d),df.date))
@@ -134,7 +116,7 @@ function animateBoE(series, range; folder = "")
         plot(names(df)[2:end],getrow(df,d),title=series,label=d, ylims = (axismin,axismax))  # plot new regression line
         frame(anim)
     end
-    gif(anim, folder*series*".gif", fps=6)
+    gif(anim, joinpath(folder,series*".gif"), fps=6)
 end
 
 end # module
