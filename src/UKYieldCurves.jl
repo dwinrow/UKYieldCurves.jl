@@ -62,10 +62,10 @@ function savedata(directory,dfs;dividingyear=2016)
         for (j, suffix) in enumerate(suffixes)
             dateval = dfs[i,j][:,:date]
             dfs[i,j].date .= Dates.format.(dfs[i,j].date,"d/m/Y")
-            CSV.write(joinpath(addindirectory,series * suffix * ".csv"),dfs[i,j][year.(dateval).<dividingyear,:],newline="\r\n")
+            CSV.write(joinpath(directory,series * suffix * ".csv"),dfs[i,j][year.(dateval).<dividingyear,:],newline="\r\n")
             for y in dividingyear:year(now())
                 file = series * suffix * " " * string(y) * ".csv"
-                CSV.write(joinpath(addindirectory,file),dfs[i,j][year.(dateval).==y,:],newline="\r\n")
+                CSV.write(joinpath(directory,file),dfs[i,j][year.(dateval).==y,:],newline="\r\n")
             end
         end
     end
@@ -102,13 +102,13 @@ function getrow(df,d)
     end
 end
 
-function plotBoE(series, datestoplot)
-    df = getBoE(series)
+function plotBoE(directory, series, datestoplot)
+    df = getBoE(directory, series)
     plot(names(df)[2:end],getrow.(Ref(df),datestoplot),title=series,label=reshape(datestoplot,1,:),linewidth=3,thickness_scaling = 1)
 end
 
 function animateBoE(series, range; folder = "")
-    df = getBoE(series)
+    df = getBoE(directory, series)
     anim = Animation()
     axismax = ceil(maximum(skipmissing(vcat(getrow.(Ref(df),range)...))))
     axismin = floor(minimum(skipmissing(vcat(getrow.(Ref(df),range)...))))
