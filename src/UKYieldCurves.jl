@@ -1,13 +1,12 @@
 module UKYieldCurves
 
-    using ZipFile, XLSX, DataFrames, Dates, CSV
+    using ZipFile, XLSX, DataFrames, Dates, CSV, Downloads
 
     export downloadLatestData, gatherdata
-    
+
     """
         downloadLatestData(directory;latestonly=false)
-    Download the yield curve data to the directory given and
-    unzip it there using 7-zip from the command line 
+    Download the yield curve data zips and unzip their contents to the directory given
     """
     function downloadLatestData(;directory="",latestonly=false)
         urlstem = raw"https://www.bankofengland.co.uk/-/media/boe/files/statistics/yield-curves"
@@ -21,9 +20,13 @@ module UKYieldCurves
         end
 
         for file in files
-            download(urlstem*"/"*file,joinpath(directory,file))
-            #uses 7 zip
-            run(`7z e $(joinpath(directory,file)) -y -o$(directory)`)
+            url = urlstem*"/"*file
+            @info "Downloading $url"
+            zipbuff = Downloads.download(url,IOBuffer())
+            r = ZipFile.Reader(zipbuff)
+            for f in r.files
+                write(joinpath(directory,f.name),f)
+            end
         end
     end
 
@@ -43,7 +46,7 @@ module UKYieldCurves
                             categories = ["GLC Inflation","GLC Nominal"],
                             curveshtnames = ["spot curve","fwd curve"]
                         )
-        fetch && downloadLatestData(directory,latestonly=latestonly)
+        fetch && downloadLatestData(;directory=directory,latestonly=latestonly)
         dfs = [DataFrame() DataFrame()
                 DataFrame() DataFrame()]
         for file in readdir(directory,join=true)
@@ -89,7 +92,7 @@ module UKYieldCurves
         for (i,series) in enumerate(seriestype)
             for (j, suffix) in enumerate(suffixes)
                 dateval = dfs[i,j][:,:date]
-                dfs[i,j].date .= Dates.format.(dfs[i,j].date,"d/m/Y")
+                dfs[i,j].date .= Dates.format.(dfs[i,j].date,"Y-m-d")
                 #save all data before the dividing year as one file
                 CSV.write(joinpath(directory,series * suffix * ".csv"),dfs[i,j][year.(dateval).<dividingyear,:],newline="\r\n")
                 #save data after the dividing year as different files for each year to allow faster access
