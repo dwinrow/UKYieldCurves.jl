@@ -2,7 +2,7 @@ module UKYieldCurves
 
     using ZipFile, XLSX, DataFrames, Dates, CSV, Downloads
 
-    export downloadLatestData, gatherdata
+    export downloadLatestData, gatherdata, getBoE, getrow
 
     """
         downloadLatestData(directory;latestonly=false)
@@ -44,7 +44,8 @@ module UKYieldCurves
     """
     function gatherdata(; directory="", outdirectory="",fetch=false, saveme=true, latestonly=false,
                             categories = ["GLC Inflation","GLC Nominal"],
-                            curveshtnames = ["spot curve","fwd curve"]
+                            curveshtnames = ["spot curve","fwd curve"],
+                            dividingyear = year(today())+1
                         )
         fetch && downloadLatestData(;directory=directory,latestonly=latestonly)
         dfs = [DataFrame() DataFrame()
@@ -56,7 +57,7 @@ module UKYieldCurves
                         for sheetname in XLSX.sheetnames(xf)
                             for (j, ratetype) in enumerate(curveshtnames)
                                 if occursin(ratetype,sheetname)
-                                    dfs[i,j] = vcat(dfs[i,j],DataFrame(XLSX.readtable(file, sheetname,first_row=4)...),cols=:union)
+                                    dfs[i,j] = vcat(dfs[i,j],DataFrame(XLSX.readtable(file, sheetname,first_row=4)),cols=:union)
                                 end
                             end
                         end
@@ -68,10 +69,9 @@ module UKYieldCurves
         sort!.(dfs,"date",rev=true)
         filter!.(Ref(:date=>x->.!ismissing.(x)),dfs)
         if saveme
-            savedata(outdirectory,dfs)
-        else
-            dfs
+            savedata(outdirectory,dfs;dividingyear=dividingyear)
         end
+        dfs
     end
 
     """
@@ -129,7 +129,7 @@ module UKYieldCurves
         for file in files
             df = vcat(df,CSV.read(file,DataFrame))
         end
-        df.date = Date.(df.date,"d/m/Y")
+        #df.date = Date.(df.date,"d/m/Y")
         sort!(df,:date)
     end 
 
