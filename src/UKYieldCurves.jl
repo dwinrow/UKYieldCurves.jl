@@ -2,13 +2,16 @@ module UKYieldCurves
 
     using ZipFile, XLSX, DataFrames, Dates, CSV, Downloads
 
-    export downloadLatestData, gatherdata, getBoE, getrow
+    export downloadLatestData, gatherdata, getBoE, getrow, getlastdate
+
+    defaultdirectory = joinpath("data","yieldcurves")
+    defaultdownloadsdirectory = joinpath("data","yieldcurves","downloaded")
 
     """
         downloadLatestData(directory;latestonly=false)
     Download the yield curve data zips and unzip their contents to the directory given
     """
-    function downloadLatestData(;directory="",latestonly=false)
+    function downloadLatestData(;directory=defaultdownloadsdirectory,latestonly=false)
         urlstem = raw"https://www.bankofengland.co.uk/-/media/boe/files/statistics/yield-curves"
         filenamelatestdata = "latest-yield-curve-data.zip"
         filenamenominaldata = "glcnominalddata.zip"
@@ -42,7 +45,7 @@ module UKYieldCurves
         `saveme` - if true, saves the DataFrames as csvs to `outdirectory`
         `latestonly` - if true restricts scope to the latest month's data
     """
-    function gatherdata(; directory="", outdirectory="",fetch=false, saveme=true, latestonly=false,
+    function gatherdata(; directory=defaultdownloadsdirectory, outdirectory=defaultdirectory,fetch=false, saveme=true, latestonly=false,
                             categories = ["GLC Inflation","GLC Nominal"],
                             curveshtnames = ["spot curve","fwd curve"],
                             dividingyear = year(today())+1
@@ -84,7 +87,7 @@ module UKYieldCurves
         - `seriestype` the name of the file by the first dimension
         - `suffixes` the suffix to add to the seriestype by the second dimension
     """
-    function savedata(directory,dfs;dividingyear=2016,
+    function savedata(directory,dfs;dividingyear=year(today())+1,
         seriestype = ["BoE Implied RPI","uknom"],
         suffixes = [""," FWD"]
         )
@@ -108,13 +111,18 @@ module UKYieldCurves
         getlastdate(directory)
     Gets the latest date of the uknom files in the directory
     """
-    function getlastdate(directory)
+    function getlastdate(directory=defaultdirectory)
         files = readdir(directory,join=true)
-        filter!(x->occursin(r"uknom \d",x),files)
+        filter!(x->occursin(r"uknom",x),files)
         sort!(files,rev=true)
-        rows = CSV.Rows(files[1],limit=1)
-        for row in rows
-            return Date(row[1],dateformat"d/m/Y")
+        file = files[length(files) == 1 ? 1 : 2]
+        for row in CSV.Rows(file,limit=1)
+            date = row[1]
+            if occursin('/',date)
+                return Date(date,dateformat"d/m/Y")
+            else
+                return Date(date)
+            end
         end
     end
 
@@ -122,7 +130,7 @@ module UKYieldCurves
         getBoE(directory, series;date=nothing,duration=nothing)
     Load all of the BoE csv files in `directory` into a DataFrame
     """
-    function getBoE(directory, series;date=nothing,duration=nothing)
+    function getBoE(directory=defaultdirectory, series="uknom")
         files = readdir(directory,join=true)
         filter!(x->(occursin(Regex(series*"( \\d{4})?.csv"),x)),files)
         df = DataFrame()
@@ -137,7 +145,7 @@ module UKYieldCurves
         getrow(df,d)
     Get a row of a DataFrame by date `d`
     """
-    function getrow(df,d)
+    function getrow(df=getBoE(),d=today())
         d = maximum(filter(<(d),df.date))
         row = df[df.date.==d,Not(:date)]
         if size(row,1) > 0
